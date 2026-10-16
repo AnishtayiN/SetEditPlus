@@ -10,6 +10,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.seteditplus.data.ModifiedSetting
 import com.seteditplus.data.PermissionChecker
+import com.seteditplus.data.GamePreset
+import com.seteditplus.data.GameMode
 import com.seteditplus.data.PermissionMode
 import com.seteditplus.data.PreferencesRepository
 import com.seteditplus.data.SettingsEntry
@@ -436,5 +438,50 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun clearMessage() {
         operationMessage.value = null
+    }
+
+    // ---------- حالت بازی (Game Mode) ----------
+    val gameActivePreset = mutableStateOf<GamePreset?>(null)
+    val gameBusy = mutableStateOf(false)
+    private var gameSnapshot: MutableMap<String, String?>? = null
+
+    /**
+     * اعمال پروفایل بازی + لانچ بازی. snapshot قبلی نگه داشته می‌شود تا «بازگردانی» دقیق باشد.
+     */
+    fun startGameMode(preset: GamePreset, onLaunched: (Boolean) -> Unit) {
+        val repo = repository ?: run { onLaunched(false); return }
+        viewModelScope.launch {
+            gameBusy.value = true
+            val result = withContext(Dispatchers.IO) {
+                val snap = GameMode.snapshot(getApplication(), repo, preset).toMutableMap()
+                val applied = GameMode.applyAll(repo, preset)
+                Pair(snap, applied)
+            }
+            gameSnapshot = result.first
+            gameActivePreset.value = preset
+            gameBusy.value = false
+            val ok = result.second.all { it.second }
+            operationMessage.value = if (ok) "پروفایل بازی اعمال شد" else "بعضی کلیدها اعمال نشد"
+            val launched = GameMode.launchApp(getApplication(), preset.packageName)
+            onLaunched(launched)
+        }
+    }
+
+    /**
+     * بازگردانی تنظیمات به snapshotِ قبل از شروع.
+     */
+    fun stopGameMode() {
+        val repo = repository ?: return
+        val preset = gameActivePreset.value ?: return
+        val snap = gameSnapshot ?: return
+        viewModelScope.launch {
+            gameBusy.value = true
+            withContext(Dispatchers.IO) { GameMode.restoreAll(repo, snap, preset) }
+            gameSnapshot = null
+            gameActivePreset.value = null
+            gameBusy.value = false
+            operationMessage.value = "تنظیمات بازگردانی شد"
+            loadSettingsInternal()
+        }
     }
 }

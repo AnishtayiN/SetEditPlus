@@ -5,6 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -29,6 +32,14 @@ import com.seteditplus.viewmodel.SettingsViewModel
 class MainActivity : ComponentActivity() {
 
     private val viewModel: SettingsViewModel by viewModels()
+    private val wasInBackground = mutableStateOf(false)
+    private var resumedOnce = false
+
+    override fun onResume() {
+        super.onResume()
+        if (resumedOnce) wasInBackground.value = true
+        resumedOnce = true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -86,6 +97,25 @@ class MainActivity : ComponentActivity() {
                     SettingsDialog(
                         viewModel = viewModel,
                         onDismiss = { showSettings = false }
+                    )
+                }
+
+                val gameActive = viewModel.gameActivePreset.value
+                val returning by wasInBackground
+                if (gameActive != null && returning) {
+                    AlertDialog(
+                        onDismissRequest = { wasInBackground.value = false },
+                        title = { Text("بازگشتی!") },
+                        text = { Text("پروفایل «${gameActive.label}» هنوز فعاله. بازگردانی کنم؟") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.stopGameMode()
+                                wasInBackground.value = false
+                            }) { Text("بازگردانی") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { wasInBackground.value = false }) { Text("بازی ادامه دارد") }
+                        }
                     )
                 }
             }

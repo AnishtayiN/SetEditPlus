@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Search
@@ -131,6 +132,7 @@ fun MainScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 5 }
     }
 
+    var showGameMode by remember { mutableStateOf(false) }
     var showEditSheet by remember { mutableStateOf(false) }
     var editKey by remember { mutableStateOf("") }
     var editValue by remember { mutableStateOf("") }
@@ -325,6 +327,17 @@ fun MainScreen(
                                             )
                                         }
                                         
+                                        IconButton(onClick = {
+                                            HapticUtil.performClick(view)
+                                            showGameMode = true
+                                        }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.SportsEsports,
+                                                contentDescription = "حالت بازی",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
                                         IconButton(onClick = {
                                             HapticUtil.performClick(view)
                                             onNavigateToSettings()
@@ -603,6 +616,14 @@ fun MainScreen(
                 viewModel.restoreSetting(deleteKey)
                 showRestoreConfirm = false
             }
+        )
+    }
+
+    // حالت بازی
+    if (showGameMode) {
+        GameModeDialog(
+            viewModel = viewModel,
+            onDismiss = { showGameMode = false }
         )
     }
 }

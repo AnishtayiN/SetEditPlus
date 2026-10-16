@@ -23,7 +23,7 @@ android {
             if (ksB64 != null) {
                 val ksFile = rootProject.file("release.keystore")
                 if (!ksFile.exists()) {
-                    val decoded = java.util.Base64.getDecoder().decode(ksB64)
+                    val decoded = Base64.getDecoder().decode(ksB64)
                     ksFile.writeBytes(decoded)
                 }
                 storeFile = ksFile

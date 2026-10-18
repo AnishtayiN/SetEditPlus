@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.seteditplus.data.ModifiedSetting
 import com.seteditplus.data.PermissionChecker
 import com.seteditplus.data.GamePreset
+import com.seteditplus.data.SettingsDump
 import com.seteditplus.data.GameMode
 import com.seteditplus.data.PermissionMode
 import com.seteditplus.data.PreferencesRepository
@@ -482,6 +483,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gameBusy.value = false
             operationMessage.value = "تنظیمات بازگردانی شد"
             loadSettingsInternal()
+        }
+    }
+
+    /**
+     * خروجی کامل دیتابیس تنظیمات به Download — همان کار اسکریپت، از داخل اپ.
+     */
+    fun exportAllSettings(onDone: (String?) -> Unit) {
+        val repo = repository ?: run { onDone(null); return }
+        viewModelScope.launch {
+            val path = withContext(Dispatchers.IO) {
+                SettingsDump.export(getApplication(), repo)
+            }
+            operationMessage.value = if (path != null) "ذخیره شد: $path" else "ذخیره ناموفق بود"
+            onDone(path)
         }
     }
 }

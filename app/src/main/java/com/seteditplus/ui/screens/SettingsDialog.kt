@@ -15,11 +15,17 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -36,6 +42,7 @@ fun SettingsDialog(
 ) {
     val currentTheme = viewModel.themeMode.value
     val autostart = viewModel.isAutostartEnabled.value
+    var exporting by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -115,6 +122,36 @@ fun SettingsDialog(
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(start = 8.dp)
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "خروجی کامل تنظیمات (txt)",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "ذخیره در Download: setedit-all-….txt",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (exporting) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp))
+                    } else {
+                        OutlinedButton(onClick = {
+                            exporting = true
+                            viewModel.exportAllSettings { _ -> exporting = false }
+                        }) {
+                            Text("ساخت فایل")
+                        }
                     }
                 }
 

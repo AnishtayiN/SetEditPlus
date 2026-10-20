@@ -31,6 +31,10 @@ import com.seteditplus.viewmodel.SettingsViewModel
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_ROUTE = "open_route"
+    }
+
     private val viewModel: SettingsViewModel by viewModels()
     private val wasInBackground = mutableStateOf(false)
     private var resumedOnce = false

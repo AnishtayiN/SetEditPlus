@@ -133,6 +133,23 @@ class PreferencesRepository(context: Context) {
         prefs.edit { remove("modified_settings") }
     }
 
+    // ---------- موتور داخلی / ابزارها ----------
+    fun isEngineAutostart(): Boolean = prefs.getBoolean("engine_autostart", false)
+    fun setEngineAutostart(enabled: Boolean) { prefs.edit { putBoolean("engine_autostart", enabled) } }
+
+    fun isRootConfirmed(): Boolean = prefs.getBoolean("root_confirmed", false)
+    fun setRootConfirmed(v: Boolean) { prefs.edit { putBoolean("root_confirmed", v) } }
+
+    fun getTerminalHistory(): List<String> =
+        (prefs.getString("terminal_history", "") ?: "").split('\u0001').filter { it.isNotBlank() }
+    fun setTerminalHistory(list: List<String>) {
+        prefs.edit { putString("terminal_history", list.takeLast(100).joinToString("\u0001")) }
+    }
+
+    fun getCustomDns(): List<String> =
+        (prefs.getString("custom_dns", "") ?: "").split('\n').filter { it.isNotBlank() }
+    fun setCustomDns(list: List<String>) { prefs.edit { putString("custom_dns", list.distinct().joinToString("\n")) } }
+
     fun resetAllPreferences() {
         prefs.edit { clear() }
     }

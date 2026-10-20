@@ -14,8 +14,8 @@ android {
         applicationId = "com.seteditplus"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -55,6 +55,18 @@ android {
     }
     buildFeatures {
         compose = true
+        aidl = true
+        buildConfig = true
+    }
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*"
+            )
+        }
     }
 }
 
@@ -73,6 +85,12 @@ dependencies {
     implementation(libs.androidx.splashscreen)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+
+    // موتور داخلی: کلاینت ADB بی‌سیم (جفت‌سازی + اتصال) بدون نیاز به اپ جدا
+    implementation(libs.libadb)
+    implementation(libs.conscrypt.android)
+    implementation(libs.bouncycastle.pkix)
+    implementation(libs.bouncycastle.prov)
 
     testImplementation(libs.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)

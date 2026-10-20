@@ -10,6 +10,9 @@ navigationCompose = "2.8.4"
 shizuku = "13.1.5"
 splashscreen = "1.0.1"
 junit = "4.13.2"
+libadb = "3.1.1"
+conscrypt = "2.5.3"
+bouncycastle = "1.81"
 junitVersion = "1.2.1"
 
 [libraries]
@@ -31,6 +34,10 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
+libadb = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadb" }
+conscrypt-android = { group = "org.conscrypt", name = "conscrypt-android", version.ref = "conscrypt" }
+bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk15to18", version.ref = "bouncycastle" }
+bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk15to18", version.ref = "bouncycastle" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 

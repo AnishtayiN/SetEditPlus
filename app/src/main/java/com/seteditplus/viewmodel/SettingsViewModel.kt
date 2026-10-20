@@ -20,6 +20,13 @@ import com.seteditplus.data.SettingsRepository
 import com.seteditplus.data.SettingsTable
 import com.seteditplus.data.ThemeMode
 import com.seteditplus.ui.screens.ExtendedTab
+import com.seteditplus.data.DirectSettings
+import com.seteditplus.engine.EngineClient
+import com.seteditplus.adb.AdbEngine
+import com.seteditplus.log.ActivityLog
+import com.seteditplus.log.LogCategory
+import com.seteditplus.priv.Privileged
+import com.seteditplus.shizuku.ShizukuBridge
 import rikka.shizuku.Shizuku
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,6 +66,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val shizukuListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == 101) {
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                ShizukuBridge.bind()
                 viewModelScope.launch {
                     finalizePermissionSuccess(PermissionMode.SHIZUKU)
                 }
@@ -70,6 +78,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     init {
+        Privileged.rootGranted = preferences.isRootConfirmed()
         try {
             Shizuku.addRequestPermissionResultListener(shizukuListener)
         } catch (e: Exception) {
@@ -101,6 +110,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             if (mode == PermissionMode.ROOT) {
                 val available = withContext(Dispatchers.IO) { PermissionChecker.isRootAvailable() }
                 if (available) {
+                    Privileged.rootGranted = true
+                    preferences.setRootConfirmed(true)
                     finalizePermissionSuccess(mode)
                 } else {
                     permissionError.value = "Root access not detected. Try using Shizuku."
@@ -118,6 +129,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 
                 val granted = withContext(Dispatchers.IO) { PermissionChecker.isShizukuPermissionGranted() }
                 if (granted) {
+                    ShizukuBridge.bind()
                     finalizePermissionSuccess(mode)
                 } else {
                     try {
@@ -126,6 +138,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         permissionError.value = "Shizuku request error: ${e.message}"
                         isLoading.value = false
                     }
+                }
+            } else if (mode == PermissionMode.ENGINE) {
+                val ok = withContext(Dispatchers.IO) {
+                    EngineClient.isAlive() || EngineClient.awaitAlive(2500) || AdbEngine.isConnected()
+                }
+                if (ok) {
+                    finalizePermissionSuccess(mode)
+                } else {
+                    permissionError.value = "موتور داخلی فعال نیست. از «راه‌اندازی موتور داخلی» یک بار جفت‌سازی و استارت کن."
+                    engineSetupRequested.value = true
+                    isPermissionGranted.value = false
+                    isLoading.value = false
+                }
+            } else if (mode == PermissionMode.DIRECT) {
+                if (DirectSettings.isGranted(getApplication())) {
+                    finalizePermissionSuccess(mode)
+                } else {
+                    permissionError.value = "WRITE_SECURE_SETTINGS هنوز به SetEdit+ داده نشده. با موتور داخلی/Shizuku/روت «اعطای دائمی» را بزن یا: adb shell pm grant com.seteditplus android.permission.WRITE_SECURE_SETTINGS"
+                    isPermissionGranted.value = false
+                    isLoading.value = false
                 }
             } else if (mode == PermissionMode.PROVIDER) {
                 val ok = withContext(Dispatchers.IO) {
@@ -142,7 +174,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** وقتی کاربر حالت موتور را زد ولی موتور فعال نبود، صفحهٔ راه‌اندازی باز شود */
+    val engineSetupRequested = mutableStateOf(false)
+
+    fun repositoryOrNull(): SettingsRepository? = repository
+
+    /** خواندن یک کلید از هر جدول (برای ابزارها) */
+    suspend fun readSetting(table: SettingsTable, key: String): String? =
+        withContext(Dispatchers.IO) { repository?.get(table, key) }
+
+    /** نوشتن کلید از ابزارها + ثبت در «تغییرات» و گزارش فعالیت */
+    suspend fun writeSetting(table: SettingsTable, key: String, value: String?, category: LogCategory = LogCategory.TWEAK): Boolean {
+        val repo = repository ?: return false
+        val stock = withContext(Dispatchers.IO) { repo.get(table, key) }
+        val ok = withContext(Dispatchers.IO) {
+            if (value == null) repo.delete(table, key) else repo.put(table, key, value)
+        }
+        if (ok) {
+            val existing = preferences.getModifiedSettings().find { it.key == key && it.table == table.name }
+            val mod = ModifiedSetting(table.name, key, value ?: "", existing?.stockValue ?: stock, value == null)
+            preferences.addModifiedSetting(mod)
+            modifiedSettingsMap[key] = mod
+        }
+        ActivityLog.add(category, "${table.name.lowercase()} • $key", if (value == null) "حذف" else "= $value", ok)
+        return ok
+    }
+
     private fun finalizePermissionSuccess(mode: PermissionMode) {
+        ActivityLog.add(LogCategory.SYSTEM, "حالت دسترسی: ${mode.name}")
         permissionMode.value = mode
         preferences.setPermissionMode(mode)
         isPermissionGranted.value = true
@@ -350,11 +409,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     preferences.addModifiedSetting(mod)
                     modifiedSettingsMap[key] = mod
                     operationMessage.value = "✓ Setting saved"
+                    ActivityLog.add(LogCategory.SETTING, "${targetTable.name.lowercase()} • $key", "= $value")
                     loadSettings()
                 }
             } else {
                 withContext(Dispatchers.Main) {
                     operationMessage.value = "Error: System rejected the change"
+                    ActivityLog.add(LogCategory.SETTING, "${targetTable.name.lowercase()} • $key", "رد شد: $value", false)
                 }
             }
         }
@@ -389,6 +450,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     preferences.addModifiedSetting(mod)
                     modifiedSettingsMap[key] = mod
                     operationMessage.value = "✓ Setting deleted"
+                    ActivityLog.add(LogCategory.SETTING, "${targetTable.name.lowercase()} • $key", "حذف شد")
                     loadSettings()
                 }
             } else {
@@ -420,6 +482,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     preferences.removeModifiedSetting(mod.table, key)
                     modifiedSettingsMap.remove(key)
                     operationMessage.value = "✓ Setting restored to stock"
+                    ActivityLog.add(LogCategory.SETTING, "${targetTable.name.lowercase()} • $key", "بازگردانی به پیش‌فرض")
                     loadSettings()
                 }
             } else {
@@ -463,6 +526,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             gameBusy.value = false
             val ok = result.second.all { it.second }
             operationMessage.value = if (ok) "پروفایل بازی اعمال شد" else "بعضی کلیدها اعمال نشد"
+            ActivityLog.add(LogCategory.GAME, "حالت بازی: ${preset.label}", "", ok)
             val launched = GameMode.launchApp(getApplication(), preset.packageName)
             onLaunched(launched)
         }

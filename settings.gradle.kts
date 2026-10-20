@@ -10,6 +10,13 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content {
+                includeGroup("com.github.MuntashirAkon")
+                includeGroup("com.github.MuntashirAkon.spake2-java")
+            }
+        }
     }
 }
 rootProject.name = "SetEditPlus"

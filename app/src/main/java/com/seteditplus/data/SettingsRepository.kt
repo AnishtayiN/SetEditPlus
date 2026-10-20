@@ -2,211 +2,89 @@ package com.seteditplus.data
 
 import android.content.Context
 import android.util.Log
-import rikka.shizuku.Shizuku
+import com.seteditplus.adb.AdbEngine
+import com.seteditplus.engine.EngineClient
+import com.seteditplus.priv.Privileged
+import com.seteditplus.priv.ShellResult
+import com.seteditplus.shizuku.ShizukuBridge
 
 /**
- * Repository that reads/writes Android Settings via Root or Shizuku.
- *
- * Root mode uses `settings` CLI commands via su.
- * Shizuku mode uses content resolver after granting Shizuku permission.
+ * Repository that reads/writes Android Settings via:
+ * Root (su) • Shizuku/Shizuku+/Sui (UserService) • موتور داخلی • حالت پل • حالت مستقیم
  */
 class SettingsRepository(
     private val context: Context,
     private val mode: PermissionMode
 ) {
 
-    /**
-     * Read all settings from the given table.
-     */
-    fun getAll(table: SettingsTable): List<SettingsEntry> {
-        return when (mode) {
-            PermissionMode.ROOT -> getAllViaRoot(table)
-            PermissionMode.SHIZUKU -> getAllViaShizuku(table)
-            PermissionMode.PROVIDER -> ProviderBridge.getAll(context, table)
+    fun getAll(table: SettingsTable): List<SettingsEntry> = when (mode) {
+        PermissionMode.PROVIDER -> ProviderBridge.getAll(context, table)
+        PermissionMode.DIRECT -> {
+            val direct = DirectSettings.getAll(context, table)
+            if (direct.isEmpty() && Privileged.isAvailable()) parseSettingsList(Privileged.exec(cmd("list", table)).out)
+            else direct
+        }
+        else -> parseSettingsList(shell(cmd("list", table)).out)
+    }
+
+    fun get(table: SettingsTable, key: String): String? = when (mode) {
+        PermissionMode.PROVIDER -> ProviderBridge.get(context, table, key)
+        PermissionMode.DIRECT -> DirectSettings.get(context, table, key)
+        else -> {
+            val r = shell(cmd("get", table, key)).out.trim()
+            if (r == "null" || r.isEmpty()) null else r
         }
     }
 
-    /**
-     * Read a single setting.
-     */
-    fun get(table: SettingsTable, key: String): String? {
-        return when (mode) {
-            PermissionMode.ROOT -> getViaRoot(table, key)
-            PermissionMode.SHIZUKU -> getViaShizuku(table, key)
-            PermissionMode.PROVIDER -> ProviderBridge.get(context, table, key)
-        }
+    fun put(table: SettingsTable, key: String, value: String): Boolean = when (mode) {
+        PermissionMode.PROVIDER -> ProviderBridge.put(context, table, key, value)
+        PermissionMode.DIRECT -> DirectSettings.put(context, table, key, value) ||
+            (Privileged.isAvailable() && Privileged.exec(cmd("put", table, key, value)).ok)
+        else -> shellOk(cmd("put", table, key, value))
     }
 
-    /**
-     * Write (put) a setting.
-     */
-    fun put(table: SettingsTable, key: String, value: String): Boolean {
-        return when (mode) {
-            PermissionMode.ROOT -> putViaRoot(table, key, value)
-            PermissionMode.SHIZUKU -> putViaShizuku(table, key, value)
-            PermissionMode.PROVIDER -> ProviderBridge.put(context, table, key, value)
-        }
+    fun delete(table: SettingsTable, key: String): Boolean = when (mode) {
+        PermissionMode.PROVIDER -> ProviderBridge.delete(context, table, key)
+        PermissionMode.DIRECT -> DirectSettings.delete(context, table, key) ||
+            (Privileged.isAvailable() && Privileged.exec(cmd("delete", table, key)).ok)
+        else -> shellOk(cmd("delete", table, key))
     }
 
-    /**
-     * Delete a setting.
-     */
-    fun delete(table: SettingsTable, key: String): Boolean {
-        return when (mode) {
-            PermissionMode.ROOT -> deleteViaRoot(table, key)
-            PermissionMode.SHIZUKU -> deleteViaShizuku(table, key)
-            PermissionMode.PROVIDER -> ProviderBridge.delete(context, table, key)
-        }
+    private fun cmd(op: String, table: SettingsTable, vararg args: String): String =
+        (listOf("settings", op, table.name.lowercase()) + args.map { Privileged.q(it) }).joinToString(" ")
+
+    private fun shellOk(command: String): Boolean {
+        val r = shell(command)
+        if (!r.ok) Log.w("SettingsRepository", "failed: $command -> ${r.text}")
+        return r.ok && !r.text.contains("Exception") && !r.text.contains("Permission Denial")
     }
 
-    private fun getAllViaRoot(table: SettingsTable): List<SettingsEntry> {
-        val tableName = table.name.lowercase()
-        val result = executeRootCommand(arrayOf("settings", "list", tableName))
-        return parseSettingsList(result)
-    }
-
-    private fun getViaRoot(table: SettingsTable, key: String): String? {
-        val tableName = table.name.lowercase()
-        val result = executeRootCommand(arrayOf("settings", "get", tableName, key)).trim()
-        return if (result == "null" || result.isEmpty()) null else result
-    }
-
-    private fun putViaRoot(table: SettingsTable, key: String, value: String): Boolean {
-        val tableName = table.name.lowercase()
-        return try {
-            executeRootCommand(arrayOf("settings", "put", tableName, key, value))
-            true
-        } catch (e: Exception) {
-            false
+    private fun shell(command: String): ShellResult = when (mode) {
+        PermissionMode.ROOT -> Privileged.execRoot(command)
+        PermissionMode.SHIZUKU -> ShizukuBridge.exec(command)
+        PermissionMode.ENGINE -> when {
+            EngineClient.isAlive() -> EngineClient.exec(command)
+            AdbEngine.isConnected() -> AdbEngine.exec(command)
+            else -> Privileged.exec(command)
         }
-    }
-
-    private fun deleteViaRoot(table: SettingsTable, key: String): Boolean {
-        val tableName = table.name.lowercase()
-        return try {
-            executeRootCommand(arrayOf("settings", "delete", tableName, key))
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun executeRootCommand(args: Array<String>): String {
-        /**
-         * 'su -c' evaluates the command in a shell. 
-         * Arguments are properly quoted to prevent command injection.
-         */
-        val escapedCommand = args.joinToString(" ") { arg ->
-            "'" + arg.replace("'", "'\\''") + "'"
-        }
-
-        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", escapedCommand))
-        return try {
-            val stderrThread = Thread { process.errorStream.use { it.readBytes() } }
-            stderrThread.start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            process.waitFor()
-            stderrThread.join(3000)
-            output
-        } finally {
-            process.destroy()
-        }
-    }
-
-    private fun getAllViaShizuku(table: SettingsTable): List<SettingsEntry> {
-        return try {
-            val result = executeShizukuCommand(arrayOf("settings", "list", table.name.lowercase()))
-            parseSettingsList(result)
-        } catch (e: Exception) {
-            Log.e("SettingsRepository", "Failed to list via Shizuku", e)
-            emptyList()
-        }
-    }
-
-    private fun getViaShizuku(table: SettingsTable, key: String): String? {
-        return try {
-            val result = executeShizukuCommand(arrayOf("settings", "get", table.name.lowercase(), key)).trim()
-            if (result == "null" || result.isEmpty()) null else result
-        } catch (e: Exception) {
-            Log.e("SettingsRepository", "Failed to get via Shizuku", e)
-            null
-        }
-    }
-
-    private fun putViaShizuku(table: SettingsTable, key: String, value: String): Boolean {
-        return try {
-            executeShizukuCommand(arrayOf("settings", "put", table.name.lowercase(), key, value))
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun deleteViaShizuku(table: SettingsTable, key: String): Boolean {
-        return try {
-            executeShizukuCommand(arrayOf("settings", "delete", table.name.lowercase(), key))
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun executeShizukuCommand(args: Array<String>): String {
-        return try {
-            val method = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            method.isAccessible = true
-            val process = method.invoke(null, args, null, null) as Process
-            try {
-                val stderrThread = Thread { 
-                    val errorOutput = process.errorStream.bufferedReader().use { it.readText() }
-                    if (errorOutput.contains("SecurityException", ignoreCase = true) || 
-                        errorOutput.contains("Permission Denial", ignoreCase = true)) {
-                        Log.e("SettingsRepository", "Android 17+ Security Restriction: $errorOutput")
-                    }
-                }
-                stderrThread.start()
-                val output = process.inputStream.bufferedReader().use { it.readText() }
-                process.waitFor()
-                stderrThread.join(1000)
-                output
-            } finally {
-                process.destroy()
-            }
-        } catch (e: Exception) {
-            Log.e("SettingsRepository", "Shizuku command failed", e)
-            ""
-        }
+        else -> Privileged.exec(command)
     }
 
     private fun parseSettingsList(raw: String): List<SettingsEntry> {
         val result = mutableListOf<SettingsEntry>()
-        val lines = raw.lines()
         var currentKey: String? = null
         var currentValue: StringBuilder? = null
-
-        for (line in lines) {
+        for (line in raw.lines()) {
             val idx = line.indexOf('=')
-            if (idx != -1) {
-                if (currentKey != null && currentValue != null) {
-                    result.add(SettingsEntry(currentKey, currentValue.toString()))
-                }
+            if (idx > 0) {
+                if (currentKey != null && currentValue != null) result.add(SettingsEntry(currentKey, currentValue.toString()))
                 currentKey = line.substring(0, idx)
                 currentValue = StringBuilder(line.substring(idx + 1))
-            } else {
-                if (currentValue != null) {
-                    currentValue.append("\n").append(line)
-                }
+            } else if (currentValue != null) {
+                currentValue.append("\n").append(line)
             }
         }
-        if (currentKey != null && currentValue != null) {
-            result.add(SettingsEntry(currentKey, currentValue.toString()))
-        }
-        
+        if (currentKey != null && currentValue != null) result.add(SettingsEntry(currentKey, currentValue.toString().trimEnd()))
         return result.sortedBy { it.key.lowercase() }
     }
 }

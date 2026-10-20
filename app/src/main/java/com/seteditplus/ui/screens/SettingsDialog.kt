@@ -98,6 +98,8 @@ fun SettingsDialog(
 
                 val currentPermission = viewModel.permissionMode.value
                 val permModes = listOf(
+                    com.seteditplus.data.PermissionMode.ENGINE to R.string.btn_engine,
+                    com.seteditplus.data.PermissionMode.DIRECT to R.string.btn_direct,
                     com.seteditplus.data.PermissionMode.PROVIDER to R.string.btn_provider,
                     com.seteditplus.data.PermissionMode.ROOT to R.string.btn_root,
                     com.seteditplus.data.PermissionMode.SHIZUKU to R.string.btn_shizuku

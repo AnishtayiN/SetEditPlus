@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -28,6 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.seteditplus.engine.EngineClient
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,7 +72,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun PermissionScreen(
     viewModel: SettingsViewModel,
-    onPermissionGranted: () -> Unit
+    onPermissionGranted: () -> Unit,
+    onOpenEngine: () -> Unit = {},
+    onOpenTools: () -> Unit = {}
 ) {
     val view = LocalView.current
     val isLoading by viewModel.isLoading
@@ -106,7 +114,8 @@ fun PermissionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -137,7 +146,7 @@ fun PermissionScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(64.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             AnimatedVisibility(
                 visible = showContent,
@@ -172,6 +181,49 @@ fun PermissionScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         PermissionButton(
+                            title = stringResource(R.string.btn_engine),
+                            subtitle = stringResource(R.string.btn_engine_desc),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Memory,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            isLoading = isLoading && viewModel.permissionMode.value == PermissionMode.ENGINE,
+                            isTop = true,
+                            isBottom = false,
+                            onClick = {
+                                HapticUtil.performClick(view)
+                                if (EngineClient.isAlive()) viewModel.selectPermissionMode(PermissionMode.ENGINE)
+                                else onOpenEngine()
+                            }
+                        )
+
+                        PermissionButton(
+                            title = stringResource(R.string.btn_direct),
+                            subtitle = stringResource(R.string.btn_direct_desc),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Key,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            isLoading = isLoading && viewModel.permissionMode.value == PermissionMode.DIRECT,
+                            isTop = false,
+                            isBottom = false,
+                            onClick = {
+                                HapticUtil.performClick(view)
+                                viewModel.selectPermissionMode(PermissionMode.DIRECT)
+                            }
+                        )
+
+                        PermissionButton(
                             title = stringResource(R.string.btn_root),
                             subtitle = stringResource(R.string.btn_root_desc),
                             icon = {
@@ -184,7 +236,7 @@ fun PermissionScreen(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             isLoading = isLoading && viewModel.permissionMode.value == PermissionMode.ROOT,
-                            isTop = true,
+                            isTop = false,
                             isBottom = false,
                             onClick = {
                                 HapticUtil.performClick(view)
@@ -237,6 +289,11 @@ fun PermissionScreen(
                 }
             }
         }
+
+        androidx.compose.material3.TextButton(
+            onClick = onOpenTools,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+        ) { Text("ابزارها و عیب‌یاب") }
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -297,7 +354,7 @@ private fun PermissionButton(
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .height(96.dp)
+            .heightIn(min = 96.dp)
             .scale(scale),
         shape = RoundedCornerShape(
             topStart = topStart,

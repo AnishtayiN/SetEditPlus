@@ -28,6 +28,12 @@ import com.seteditplus.ui.screens.PermissionScreen
 import com.seteditplus.ui.screens.SettingsDialog
 import com.seteditplus.ui.theme.SetEditPlusTheme
 import com.seteditplus.viewmodel.SettingsViewModel
+import com.seteditplus.ui.hub.HubHost
+import com.seteditplus.ui.hub.HubNavigator
+import com.seteditplus.ui.hub.Route
+import com.seteditplus.shizuku.ShizukuBridge
+import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
 
@@ -36,11 +42,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private val viewModel: SettingsViewModel by viewModels()
+    private val hubNav = HubNavigator()
+
+    private fun handleRoute(intent: Intent?) {
+        val r = intent?.getStringExtra(EXTRA_ROUTE) ?: return
+        runCatching { Route.valueOf(r) }.getOrNull()?.let { hubNav.open(it) }
+        intent.removeExtra(EXTRA_ROUTE)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleRoute(intent)
+    }
     private val wasInBackground = mutableStateOf(false)
     private var resumedOnce = false
 
     override fun onResume() {
         super.onResume()
+        ShizukuBridge.bind()
         if (resumedOnce) wasInBackground.value = true
         resumedOnce = true
     }
@@ -55,6 +74,8 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
+
+        handleRoute(intent)
 
         setContent {
             val themeMode by viewModel.themeMode
@@ -87,16 +108,36 @@ class MainActivity : ComponentActivity() {
                     if (granted) {
                         MainScreen(
                             viewModel = viewModel,
-                            onNavigateToSettings = { showSettings = true }
+                            onNavigateToSettings = { showSettings = true },
+                            onOpenTools = { hubNav.open(Route.HUB) }
                         )
                     } else {
                         PermissionScreen(
                             viewModel = viewModel,
-                            onPermissionGranted = { /* AnimatedContent handles transition */ }
+                            onPermissionGranted = { /* AnimatedContent handles transition */ },
+                            onOpenEngine = { hubNav.open(Route.ENGINE) },
+                            onOpenTools = { hubNav.open(Route.HUB) }
                         )
                     }
                 }
                 
+                val setupRequested by viewModel.engineSetupRequested
+                LaunchedEffect(setupRequested) {
+                    if (setupRequested) {
+                        hubNav.open(Route.ENGINE)
+                        viewModel.engineSetupRequested.value = false
+                    }
+                }
+                // وقتی حالت دسترسی از داخل ابزارها انتخاب شد، ابزارها بسته شوند
+                val modeNow = viewModel.permissionMode.value
+                var lastMode by remember { mutableStateOf(modeNow) }
+                LaunchedEffect(modeNow, isPermissionGranted) {
+                    if (modeNow != lastMode && isPermissionGranted && hubNav.current == Route.ENGINE) hubNav.close()
+                    if (isPermissionGranted) lastMode = modeNow
+                }
+
+                HubHost(hubNav, viewModel)
+
                 if (showSettings) {
                     SettingsDialog(
                         viewModel = viewModel,

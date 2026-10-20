@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Construction
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.SportsEsports
@@ -111,7 +112,8 @@ enum class ExtendedTab {
 @Composable
 fun MainScreen(
     viewModel: SettingsViewModel,
-    onNavigateToSettings: () -> Unit // Callback to open full settings dialog or sheet
+    onNavigateToSettings: () -> Unit, // Callback to open full settings dialog or sheet
+    onOpenTools: () -> Unit = {}
 ) {
     val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
@@ -327,6 +329,17 @@ fun MainScreen(
                                             )
                                         }
                                         
+                                        IconButton(onClick = {
+                                            HapticUtil.performClick(view)
+                                            onOpenTools()
+                                        }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Construction,
+                                                contentDescription = "ابزارها",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
                                         IconButton(onClick = {
                                             HapticUtil.performClick(view)
                                             showGameMode = true

@@ -6,8 +6,12 @@
     
     <string name="btn_root">Root</string>
     <string name="btn_root_desc">Full access via Superuser</string>
-    <string name="btn_shizuku">Shizuku</string>
-    <string name="btn_shizuku_desc">Access via ADB/Shizuku service</string>
+    <string name="btn_shizuku">Shizuku / Shizuku+</string>
+    <string name="btn_shizuku_desc">از طریق Shizuku، Shizuku+ یا Sui</string>
+    <string name="btn_engine">موتور داخلی</string>
+    <string name="btn_engine_desc">Shizuku داخل خود اپ — ADB بی‌سیم یا روت، بدون نصب هیچ اپ دیگری</string>
+    <string name="btn_direct">حالت مستقیم</string>
+    <string name="btn_direct_desc">بعد از یک بار اعطای WRITE_SECURE_SETTINGS — دائمی، بدون سرویس</string>
     
     <string name="err_root_unavailable">Root access not detected. Try using Shizuku.</string>
     <string name="err_shizuku_unavailable">Shizuku is not running or permission denied. Open Shizuku app and start the service.</string>
